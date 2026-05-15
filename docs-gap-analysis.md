@@ -16,7 +16,7 @@ Everything else — Direct workflow, response `three_d_secure` object, status fl
 
 ## What that means in the request
 
-When the merchant collects the fingerprint on their own HPM (because the underlying gateway has no redirect URL for Yuno to forward), Yuno's `POST /v1/payments` needs to accept the fingerprint inline. Field shape owned by Andre's spike — the only requirement at the docs level is to document where it lives in the request.
+When the merchant collects the fingerprint on their own HPM (because the underlying gateway has no redirect URL for Yuno to forward), Yuno's `POST /v1/payments` needs to accept the fingerprint inline. Field shape owned by the Core team's spike — the only requirement at the docs level is to document where it lives in the request.
 
 Reference example: the Adyen-3ds2.md file Guoqing shared in [Drive › Gateway Details › 3ds2 flow example](https://drive.google.com/drive/folders/1f_soPLGeWkdPNgLQ4YAkNBWmv4kF7bAE) shows Zuora sends the fingerprint result as a base64-encoded payload (`details.threeds2.fingerprint`). Yuno's equivalent location on the V1 Payments request is the piece to define and document.
 
@@ -26,7 +26,7 @@ Reference example: the Adyen-3ds2.md file Guoqing shared in [Drive › Gateway D
 
 | Page | Change |
 |---|---|
-| [security-and-compliance/3d-secure](https://docs.y.uno/docs/security-and-compliance/3d-secure) → Direct Integration section | Add the request-side field where Yuno receives the 3DS fingerprint for Scenario B. Field shape per Andre's spike. |
+| [security-and-compliance/3d-secure](https://docs.y.uno/docs/security-and-compliance/3d-secure) → Direct Integration section | Add the request-side field where Yuno receives the 3DS fingerprint for Scenario B. Field shape per the Core team's spike. |
 | [direct-integration-use-cases/3ds-configuration-and-testing](https://docs.y.uno/docs/direct-integration-use-cases/3ds-configuration-and-testing) | Add a test scenario covering the fingerprint inbound case. |
 
 Nothing else needs to change in the public docs.
@@ -48,5 +48,5 @@ Nothing else needs to change in the public docs.
 
 | Item | Owner | Deadline |
 |---|---|---|
-| Field name + location for the inbound 3DS fingerprint on `POST /v1/payments` | Andre (Integrations) | Mon 18 May EOD |
+| Field name + location for the inbound 3DS fingerprint on `POST /v1/payments` | Core team | Mon 18 May EOD |
 | Gateway-details markdowns from Guoqing for the s2s gateways without redirect (CyberSource, BlueSnap, PayPalPayflow) — confirm fingerprint shape per gateway | Guoqing (Zuora) | Pre-Tuesday |

@@ -147,7 +147,7 @@ sequenceDiagram
 </div>
 
 <div class="note">
-  <strong>Open piece (owned by Andre's spike):</strong> the exact field name and location for the inbound 3DS fingerprint on the V1 Payments request. The response-side <code>three_d_secure</code> object is already defined in the existing docs and stays as-is. This doc commits to the shape of the flow; field-level spec is the spike's deliverable.
+  <strong>Open piece (owned by the Core team's spike):</strong> the exact field name and location for the inbound 3DS fingerprint on the V1 Payments request. The response-side <code>three_d_secure</code> object is already defined in the existing docs and stays as-is. This doc commits to the shape of the flow; field-level spec is the spike's deliverable.
 </div>
 
 <h2>4. End-to-end sequence (Scenario A — existing Direct workflow, no changes)</h2>
@@ -202,7 +202,7 @@ sequenceDiagram
     <tr><td>Existing 3DS setup-flow parameters used by Checkout today</td><td>✅ Reused as-is, no schema change</td></tr>
     <tr><td>Existing response object <code>payment_method.detail.card.card_data.three_d_secure</code></td><td>✅ Reused as-is, no schema change</td></tr>
     <tr><td>Existing <code>redirect_url</code> location in <code>payment.payment_method.payment_method_detail.card</code></td><td>✅ Reused as-is, no schema change</td></tr>
-    <tr><td>New request-side <code>three_d_secure</code> object (browser data, fingerprint, cardholder info)</td><td>🔧 Shape owned by Andre's spike, deadline Monday 18 May EOD</td></tr>
+    <tr><td>New request-side <code>three_d_secure</code> object (browser data, fingerprint, cardholder info)</td><td>🔧 Shape owned by the Core team's spike, deadline Monday 18 May EOD</td></tr>
     <tr><td>Provider-specific extra parameters not yet supported by Yuno</td><td>🔧 Handled per provider during mapping, rolling</td></tr>
   </tbody>
 </table>
@@ -248,8 +248,8 @@ sequenceDiagram
 <table>
   <thead><tr><th>Team</th><th>Role</th></tr></thead>
   <tbody>
-    <tr><td>Integrations</td><td><strong>Leads the build.</strong> Andre has the spike open.</td></tr>
-    <tr><td>Core</td><td>No work required. Confirmed by Jairo in #yuno-3ds.</td></tr>
+    <tr><td>Core</td><td><strong>Leads the build.</strong> The inbound 3DS fingerprint field sits on V1 Payments, which Core owns. Spike open with Core team.</td></tr>
+    <tr><td>Integrations</td><td>No new build required for the public-API change. Per-provider mapping work continues as usual.</td></tr>
     <tr><td>Checkout / Cards Integration</td><td>Owns the existing 3DS setup-flow parameters being reused.</td></tr>
   </tbody>
 </table>
@@ -302,7 +302,7 @@ flowchart LR
 <table>
   <thead><tr><th>Item</th><th>Owner</th><th>Deadline</th></tr></thead>
   <tbody>
-    <tr><td>Field name + location for the inbound 3DS fingerprint on V1 Payments (the single net-new piece)</td><td>Andre (Integrations)</td><td>Monday 18 May EOD</td></tr>
+    <tr><td>Field name + location for the inbound 3DS fingerprint on V1 Payments (the single net-new piece)</td><td>Core team</td><td>Monday 18 May EOD</td></tr>
     <tr><td>Gateway-details markdowns for the s2s gateways without redirect (CyberSource, BlueSnap, PayPalPayflow) — confirm fingerprint shape per gateway</td><td>Guoqing (Zuora)</td><td>Pre-Tuesday</td></tr>
     <tr><td>De-obfuscation commitment for the 7 affected PSPs</td><td>Zuora (escalated in daily)</td><td>Tracked separately</td></tr>
   </tbody>
