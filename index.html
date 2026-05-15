@@ -2,311 +2,92 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>3DS2 Server API — Final Flow for Zuora (Option 1)</title>
+<title>3DS2 — Receiving the Device Fingerprint when Yuno's Checkout is not used</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>
   mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose', sequence: { actorMargin: 60, boxMargin: 14 } });
 </script>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 1200px; margin: 40px auto; padding: 0 40px; color: #1a1a1a; }
-  h1 { font-size: 28px; border-bottom: 2px solid #6B46C1; padding-bottom: 8px; }
-  h2 { font-size: 20px; color: #6B46C1; margin-top: 40px; }
-  h3 { font-size: 16px; margin-top: 24px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 980px; margin: 40px auto; padding: 0 40px; color: #1a1a1a; }
+  h1 { font-size: 26px; border-bottom: 2px solid #6B46C1; padding-bottom: 8px; }
+  h2 { font-size: 19px; color: #6B46C1; margin-top: 36px; }
   .mermaid { background: #fafafa; padding: 24px; border-radius: 8px; margin: 16px 0; }
   table { border-collapse: collapse; width: 100%; margin: 16px 0; }
   th, td { border: 1px solid #e0e0e0; padding: 10px 14px; text-align: left; vertical-align: top; }
   th { background: #f3f0ff; color: #4a1e9e; }
   code { background: #f3f0ff; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-  .endpoint { background: #f0f4ff; padding: 12px 16px; border-left: 4px solid #6B46C1; margin: 12px 0; border-radius: 4px; }
-  .endpoint-name { font-weight: 600; color: #4a1e9e; font-family: monospace; font-size: 14px; }
-  .note { background: #fffbea; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
-  .decision { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
-  .scenario-a { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
-  .scenario-b { background: #fdf4ff; border-left: 4px solid #a855f7; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
-  pre { background: #f7f7fb; padding: 12px 16px; border-radius: 6px; overflow-x: auto; font-size: 13px; }
+  .gap { background: #fdf4ff; border-left: 4px solid #a855f7; padding: 14px 18px; margin: 16px 0; border-radius: 4px; font-size: 15px; }
   a { color: #6B46C1; }
 </style>
 </head>
 <body>
 
-<h1>3DS2 Server API — Final Flow for Zuora (Option 1)</h1>
-<p><strong>Goal:</strong> Enable Zuora to run 3DS2 from their backend (HPM) for the merchants that do not use Yuno's SDK. All 3DS context travels inline on the existing <code>POST /v1/payments</code> request — the same pattern Yuno already uses with fraud providers and with the Direct workflow today.</p>
+<h1>3DS2 — Receiving the device fingerprint when Yuno's checkout is not used</h1>
 
-<div class="decision">
-  <strong>Decision (15 May 2026):</strong> Option 1 — single call. The device fingerprint, browser data and cardholder info travel inline on the V1 Payments request. Confirmed by Jairo in #yuno-3ds: <em>"it needs to be the 1, like with fraud providers."</em>
+<p>Yuno's existing 3DS flow assumes Yuno's checkout / SDK collects the device fingerprint. When the merchant uses their own checkout (Zuora HPM, a Zuora iframe, the merchant's own front-end), Yuno cannot collect it directly. We need a way for the merchant to pass the fingerprint to Yuno on the V1 Payments request.</p>
+
+<div class="gap">
+  <strong>The single addition to the public docs:</strong> a new inbound field on <code>POST /v1/payments</code> where the merchant passes the device fingerprint they collected on their own checkout. Field name and exact location owned by the Core team's spike.
 </div>
 
-<div class="note">
-  <strong>Grounded in existing Yuno docs.</strong> This proposal does not introduce new top-level endpoints. It reuses the existing Direct workflow + the existing <code>three_d_secure</code> response object in <code>payment_method.detail.card.card_data</code>. References:
-  <ul>
-    <li><a href="https://docs.y.uno/docs/basic-concepts/3ds-1">Basic concepts — 3DS</a></li>
-    <li><a href="https://docs.y.uno/docs/security-and-compliance/3d-secure">Security &amp; compliance — 3D Secure</a></li>
-    <li><a href="https://docs.y.uno/docs/direct-integration-use-cases/3ds-configuration-and-testing">Direct integration — 3DS configuration &amp; testing</a></li>
-  </ul>
-</div>
-
-<h2>1. What Yuno already supports today</h2>
-
-<table>
-  <thead><tr><th>Yuno capability</th><th>What it gives Zuora</th><th>Doc reference</th></tr></thead>
-  <tbody>
-    <tr>
-      <td><strong>Direct workflow</strong> (PCI-compliant, no SDK)</td>
-      <td>Single <code>POST /v1/payments</code> call. Returns <code>status: PENDING / WAITING_ADDITIONAL_STEP</code> with <code>sdk_action_required: true</code> and a <code>redirect_url</code> in <code>payment.payment_method.payment_method_detail.card</code>. Cardholder completes the challenge and returns to Zuora's <code>callback_url</code>.</td>
-      <td><a href="https://docs.y.uno/docs/security-and-compliance/3d-secure">3D Secure — Direct Integration</a></td>
-    </tr>
-    <tr>
-      <td><strong>External 3DS Integration</strong></td>
-      <td>Zuora can also submit pre-authenticated 3DS fields (ECI, cryptogram, etc.) directly on the create-payment endpoint when they have their own 3DS provider.</td>
-      <td><a href="https://docs.y.uno/docs/security-and-compliance/3d-secure">3D Secure — External Integration</a></td>
-    </tr>
-    <tr>
-      <td><strong>3DS Standalone</strong></td>
-      <td>Decouples 3DS authentication from payment authorization. Triggered via metadata <code>{ "key": "3DS_ONLY", "value": "1" }</code>. Yuno returns ECI / CAVV via webhook, Zuora uses them for authorization through Yuno or another processor.</td>
-      <td><a href="https://docs.y.uno/docs/basic-concepts/3ds-1">Basic concepts — 3DS Standalone</a></td>
-    </tr>
-    <tr>
-      <td><strong><code>three_d_secure</code> response object</strong> (already populated today)</td>
-      <td>Lives under <code>payment_method.detail.card.card_data.three_d_secure</code>. Fields: <code>version</code>, <code>electronic_commerce_indicator</code> (ECI), <code>cryptogram</code> (CAVV / AAV), <code>transaction_id</code> (XID v1 / UUID v2), <code>directory_server_transaction_id</code>, <code>pares_status</code> (Y / N / U / A), <code>acs_id</code>.</td>
-      <td><a href="https://docs.y.uno/docs/security-and-compliance/3d-secure">3D Secure — Data Fields</a></td>
-    </tr>
-    <tr>
-      <td><strong>Webhook + polling for status</strong></td>
-      <td>3DS challenge outcome and final payment status delivered via webhook. Fallback: <code>GET /v1/payments/{id}</code>. Statuses already defined: <code>CREATED → PENDING → IN_PROCESS → SUCCEEDED / DECLINED / ERROR</code>.</td>
-      <td><a href="https://docs.y.uno/docs/security-and-compliance/3d-secure">3D Secure — Real-Time Updates</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<h2>2. The two scenarios (Paloma's framing, mapped to existing capabilities)</h2>
-
-<div class="scenario-a">
-  <strong>Scenario A — Gateway returns a Redirect URL</strong> (Stripe, Adyen, the majority)<br/>
-  <strong>Fully covered by the existing Direct workflow.</strong> Zuora calls <code>POST /v1/payments</code>, Yuno returns the gateway's <code>redirect_url</code> in <code>payment.payment_method.payment_method_detail.card</code>, Zuora redirects the cardholder, the gateway closes the challenge, the result flows back via webhook with the populated <code>three_d_secure</code> response object. <strong>No new build.</strong> Parameter-mapping work only (per Paloma).
-</div>
-
-<div class="scenario-b">
-  <strong>Scenario B — Gateway does not return a Redirect URL</strong> (server-to-server gateways, e.g. CyberSource / Cardinal Commerce / BlueSnap / PayPalPayflow)<br/>
-  Since the underlying gateway does not return a redirect URL, Yuno needs a way to <strong>receive the 3DS fingerprint inline on the V1 Payments request</strong>. Yuno then runs the authentication server-to-server via Netcetera and returns the auth outcome inline (frictionless) or a <code>redirect_url</code> to the issuer's ACS (challenge), using the exact same Direct-workflow response pattern. <strong>The single net-new piece:</strong> the inbound 3DS fingerprint field on V1 Payments.
-</div>
-
-<div class="note">
-  <strong>Provider list update (14 May call):</strong> Guoqing clarified that the gateway list per pattern does not change the build, because Zuora always embeds the PSP's own JS and the handoff to Yuno is identical regardless of gateway. Jairo and Bernabe accepted in real time. <strong>We proceed without waiting for the list</strong>, scoping against the gateways already in the tracker. The list remains available if needed for edge cases.
-</div>
-
-<h2>3. End-to-end sequence (Scenario B — the net-new piece)</h2>
+<h2>Flow</h2>
 
 <div class="mermaid">
 sequenceDiagram
     autonumber
     participant CH as Cardholder<br/>(Browser)
-    participant Z as Zuora HPM<br/>(Backend)
-    participant Y as Yuno V1 Payments<br/>(request extended)
-    participant N as Netcetera MPI<br/>(Yuno's 3DS Server,<br/>already certified)
-    participant DS as Card Network DS<br/>(Visa / MC / Amex)
-    participant ACS as Issuer ACS<br/>(Cardholder's bank)
-    participant PSP as PSP Gateway
-
-    CH->>Z: Submit card on Zuora HPM
-    Z->>Z: Collect browser data<br/>(IP, UA, screen, fingerprint)
-
-    rect rgb(245, 240, 255)
-        Note over Z,ACS: SINGLE CALL — POST /v1/payments with three_d_secure inline
-        Z->>Y: POST /v1/payments<br/>{ payment_method, amount, currency,<br/>three_d_secure: { fingerprint } }
-        Y->>N: Initiate 3DS2 authentication (s2s)
-        N->>DS: AReq
-        DS->>ACS: Route to issuer
-        ACS-->>DS: ARes (frictionless or challenge)
-        DS-->>N: Forward response
-        N-->>Y: Auth status + ECI / CAVV or challenge URL
-    end
-
-    alt Frictionless
-        Y->>PSP: Authorize with 3DS evidence
-        PSP-->>Y: Auth result
-        Y-->>Z: { status: "SUCCEEDED",<br/>payment_method.detail.card.card_data.three_d_secure:<br/>{ electronic_commerce_indicator, cryptogram, version,<br/>directory_server_transaction_id, pares_status, acs_id } }
-    else Challenge required
-        Y-->>Z: { status: "PENDING / WAITING_ADDITIONAL_STEP",<br/>sdk_action_required: true,<br/>payment.payment_method.payment_method_detail.card.redirect_url }
-        Z->>CH: Redirect to ACS challenge_url
-        CH->>ACS: Complete challenge<br/>(OTP / biometric / app)
-        ACS-->>CH: Challenge result
-        CH->>Z: Redirect back to callback_url
-
-        rect rgb(245, 240, 255)
-            Note over Z,PSP: Resume via existing Yuno mechanism (webhook + GET /payments/{id})
-            N->>DS: RReq
-            DS->>ACS: Validate
-            ACS-->>DS: RRes (final ECI, CAVV)
-            DS-->>N: Forward
-            N-->>Y: Final auth data
-            Y->>PSP: Authorize with full 3DS evidence
-            PSP-->>Y: Auth result
-            Y-->>Z: Webhook: status "SUCCEEDED" + populated three_d_secure object
-        end
-    end
-</div>
-
-<div class="note">
-  <strong>Open piece (owned by the Core team's spike):</strong> the exact field name and location for the inbound 3DS fingerprint on the V1 Payments request. The response-side <code>three_d_secure</code> object is already defined in the existing docs and stays as-is. This doc commits to the shape of the flow; field-level spec is the spike's deliverable.
-</div>
-
-<h2>4. End-to-end sequence (Scenario A — existing Direct workflow, no changes)</h2>
-
-<div class="mermaid">
-sequenceDiagram
-    autonumber
-    participant CH as Cardholder<br/>(Browser)
-    participant Z as Zuora HPM
-    participant Y as Yuno V1 Payments<br/>(Direct workflow, current)
-    participant PSP as PSP Gateway<br/>(returns redirect URL)
+    participant M as Merchant checkout<br/>(Zuora HPM / iframe / own)
+    participant Y as Yuno V1 Payments
+    participant N as Netcetera MPI<br/>(Yuno's 3DS Server)
     participant ACS as Issuer ACS
 
-    CH->>Z: Submit card on Zuora HPM
-    Z->>Y: POST /v1/payments<br/>{ payment_method, amount, currency }
-    Y->>PSP: Initiate payment + 3DS
-    PSP-->>Y: { redirect_url }
-    Y-->>Z: { status: "PENDING", sdk_action_required: true,<br/>payment.payment_method.payment_method_detail.card.redirect_url }
-    Z->>CH: Redirect to gateway redirect_url
-    CH->>ACS: Complete challenge on ACS<br/>(gateway hosts the flow)
-    ACS-->>PSP: Challenge result
-    PSP-->>Y: Final auth + payment result
-    Y-->>Z: Webhook: status "SUCCEEDED" + populated three_d_secure object
+    CH->>M: Submit card
+    M->>M: Collect device fingerprint<br/>on its own checkout
+    M->>Y: POST /v1/payments<br/>{ payment_method, amount, currency,<br/>three_d_secure: { fingerprint } }
+    Y->>N: Run 3DS authentication (s2s)
+    N->>ACS: AReq → ARes
+    alt Frictionless
+        Y-->>M: SUCCEEDED + populated three_d_secure response
+    else Challenge required
+        Y-->>M: PENDING + redirect_url to ACS
+        M->>CH: Redirect to ACS challenge
+        CH->>ACS: Complete challenge
+        ACS-->>Y: Result (via Netcetera)
+        Y-->>M: Webhook: SUCCEEDED + populated three_d_secure response
+    end
 </div>
 
-<h2>5. The endpoint surface</h2>
+<h2>What stays the same</h2>
 
-<div class="endpoint">
-  <div class="endpoint-name">POST /v1/payments  (existing, request extended for Scenario B)</div>
-  <p><strong>Triggered by:</strong> Zuora at submit. Single call carries <code>payment_method</code> (token or card), <code>amount</code>, <code>currency</code>, plus a new optional inbound field on the request for the <strong>3DS fingerprint</strong> collected by Zuora on their HPM (Scenario B only).</p>
-  <p><strong>Returns (Scenario A and B):</strong> existing response shape. Either <code>SUCCEEDED</code> with the populated <code>three_d_secure</code> response object when frictionless, or <code>PENDING / WAITING_ADDITIONAL_STEP</code> with a <code>redirect_url</code> in <code>payment.payment_method.payment_method_detail.card</code> when a challenge is required.</p>
-  <p><strong>Pattern match:</strong> identical to how fraud providers receive their context inline on V1 Payments today. No new top-level endpoint. Only a new optional inbound field on the existing payment request.</p>
-</div>
+<ul>
+  <li>Response object <code>payment_method.detail.card.card_data.three_d_secure</code> — unchanged.</li>
+  <li><code>redirect_url</code> location in <code>payment.payment_method.payment_method_detail.card</code> — unchanged.</li>
+  <li>Status flow <code>CREATED → PENDING → IN_PROCESS → SUCCEEDED / DECLINED / ERROR</code> — unchanged.</li>
+  <li>Webhook + <code>GET /v1/payments/{id}</code> — unchanged.</li>
+</ul>
 
-<div class="endpoint">
-  <div class="endpoint-name">GET /v1/payments/{id}  (existing, no change)</div>
-  <p>Used by Zuora as fallback to retrieve the final payment status if a webhook is missed.</p>
-</div>
+<h2>Ownership</h2>
 
-<div class="endpoint">
-  <div class="endpoint-name">Webhook  (existing, no change)</div>
-  <p>Delivers the 3DS challenge outcome and final payment status to Zuora's registered webhook endpoint. Status transitions: <code>CREATED → PENDING → IN_PROCESS → SUCCEEDED / DECLINED / ERROR</code>.</p>
-</div>
+<p>Core team. The field lives on V1 Payments, which Core owns.</p>
 
-<h2>6. Parameter mapping (Paloma)</h2>
-
-<p>Both scenarios reuse the parameters Yuno already supports in the 3DS setup flow that Checkout uses today. Some providers may require extra parameters that Yuno does not yet support — those are handled per provider in the mapping exercise, not in the API surface.</p>
-
-<table>
-  <thead><tr><th>Source</th><th>Status</th></tr></thead>
-  <tbody>
-    <tr><td>Existing 3DS setup-flow parameters used by Checkout today</td><td>✅ Reused as-is, no schema change</td></tr>
-    <tr><td>Existing response object <code>payment_method.detail.card.card_data.three_d_secure</code></td><td>✅ Reused as-is, no schema change</td></tr>
-    <tr><td>Existing <code>redirect_url</code> location in <code>payment.payment_method.payment_method_detail.card</code></td><td>✅ Reused as-is, no schema change</td></tr>
-    <tr><td>New request-side <code>three_d_secure</code> object (browser data, fingerprint, cardholder info)</td><td>🔧 Shape owned by the Core team's spike, deadline Monday 18 May EOD</td></tr>
-    <tr><td>Provider-specific extra parameters not yet supported by Yuno</td><td>🔧 Handled per provider during mapping, rolling</td></tr>
-  </tbody>
-</table>
-
-<h2>7. MIT and portability post-migration (Jarrett)</h2>
-
-<table>
-  <thead><tr><th>Question</th><th>Answer</th></tr></thead>
-  <tbody>
-    <tr>
-      <td>Do we need to migrate ECI / CAVV / dsTransID from Zuora's vault?</td>
-      <td><strong>No.</strong> Schemes rely on the scheme-level NTI from the original CIT. Yuno does not need to store the 3DS response for future use.</td>
-    </tr>
-    <tr>
-      <td>Are MITs exempt from 3DS post-migration?</td>
-      <td><strong>Yes, in EU</strong>, as long as Yuno passes the proper stored credential / scheme-level NTI from the initial CIT.</td>
-    </tr>
-    <tr>
-      <td>Can Yuno orchestrate MITs across PSPs?</td>
-      <td><strong>Yes — only if</strong> Yuno has the <strong>scheme-level NTI</strong> (not PSP-level).</td>
-    </tr>
-    <tr>
-      <td>What about the 7 PSPs returning obfuscated NTIs?</td>
-      <td>Yuno can still send MITs back to the <em>same</em> PSP that issued the obfuscated value. Cross-PSP orchestration is blocked until those PSPs release the raw NTI. Zuora needs to de-obfuscate before migration — out of Yuno's scope, already escalated in the daily.</td>
-    </tr>
-  </tbody>
-</table>
-
-<h2>8. Hard constraints (Zuora's red lines)</h2>
-
-<table>
-  <thead><tr><th>Requirement</th><th>Why it matters</th></tr></thead>
-  <tbody>
-    <tr><td>No Yuno SDK (foreground or background)</td><td>Zuora HPM already has its own browser collection layer; injecting our SDK breaks their tenant model and PCI scope.</td></tr>
-    <tr><td>No redirect to a Yuno domain for data collection</td><td>The only acceptable redirect is the ACS challenge itself, hosted by the issuer. Yuno does not host any UI in this flow.</td></tr>
-    <tr><td>Pure server-to-server (Scenario B)</td><td>Their backend calls our backend, period. Same pattern they use today with Cardinal Commerce.</td></tr>
-    <tr><td>PCI scope</td><td>Yuno's Direct workflow is gated on PCI-compliant merchants per the existing docs — Zuora qualifies.</td></tr>
-  </tbody>
-</table>
-
-<h2>9. Ownership</h2>
-
-<table>
-  <thead><tr><th>Team</th><th>Role</th></tr></thead>
-  <tbody>
-    <tr><td>Core</td><td><strong>Leads the build.</strong> The inbound 3DS fingerprint field sits on V1 Payments, which Core owns. Spike open with Core team.</td></tr>
-    <tr><td>Integrations</td><td>No new build required for the public-API change. Per-provider mapping work continues as usual.</td></tr>
-    <tr><td>Checkout / Cards Integration</td><td>Owns the existing 3DS setup-flow parameters being reused.</td></tr>
-  </tbody>
-</table>
-
-<h2>10. High-level architecture</h2>
-
-<div class="mermaid">
-flowchart LR
-    subgraph Zuora["🏢 Zuora HPM Backend"]
-        direction TB
-        Z1[Card form + browser data collection]
-        Z2[Zuora payment orchestrator]
-    end
-
-    subgraph Yuno["🟣 Yuno"]
-        direction TB
-        E1["POST /v1/payments<br/>(existing, request extended)"]
-        N[Netcetera MPI<br/>3DS Server, certified]
-        R[Routing engine]
-        W[Webhook + GET /payments/{id}]
-        E1 --> N
-        E1 --> R
-        E1 --> W
-    end
-
-    subgraph Network["💳 Card Network"]
-        DS[(Directory Server<br/>Visa / MC / Amex / Discover / JCB)]
-    end
-
-    subgraph Issuer["🏦 Cardholder's Bank"]
-        ACS[(Access Control Server<br/>OTP / biometric / app challenge)]
-    end
-
-    subgraph PSPs["External PSPs"]
-        PSPa[(Scenario A:<br/>redirect-returning PSPs)]
-        PSPb[(Scenario B:<br/>server-to-server PSPs)]
-    end
-
-    Z1 --> Z2
-    Z2 -->|single call| E1
-    N <-->|AReq / ARes<br/>RReq / RRes| DS
-    DS <-->|Route to issuer| ACS
-    R --> PSPa
-    R --> PSPb
-    W -.->|status updates| Z2
-</div>
-
-<h2>11. Open items before Tuesday May 19 (Zuora CTO / CPO meeting)</h2>
+<h2>Open items before Tuesday 19 May (Zuora CTO / CPO meeting)</h2>
 
 <table>
   <thead><tr><th>Item</th><th>Owner</th><th>Deadline</th></tr></thead>
   <tbody>
-    <tr><td>Field name + location for the inbound 3DS fingerprint on V1 Payments (the single net-new piece)</td><td>Core team</td><td>Monday 18 May EOD</td></tr>
-    <tr><td>Gateway-details markdowns for the s2s gateways without redirect (CyberSource, BlueSnap, PayPalPayflow) — confirm fingerprint shape per gateway</td><td>Guoqing (Zuora)</td><td>Pre-Tuesday</td></tr>
-    <tr><td>De-obfuscation commitment for the 7 affected PSPs</td><td>Zuora (escalated in daily)</td><td>Tracked separately</td></tr>
+    <tr><td>Field name and exact location for the inbound device fingerprint on <code>POST /v1/payments</code></td><td>Core team</td><td>Mon 18 May EOD</td></tr>
+    <tr><td>Gateway-details markdowns from Zuora for the s2s gateways without a redirect URL (CyberSource, BlueSnap, PayPalPayflow) — to confirm fingerprint shape per gateway</td><td>Guoqing (Zuora)</td><td>Pre-Tuesday</td></tr>
   </tbody>
 </table>
+
+<h2>References</h2>
+
+<ul>
+  <li><a href="https://docs.y.uno/docs/basic-concepts/3ds-1">docs.y.uno — Basic concepts / 3DS</a></li>
+  <li><a href="https://docs.y.uno/docs/security-and-compliance/3d-secure">docs.y.uno — Security &amp; compliance / 3D Secure</a></li>
+  <li><a href="https://docs.y.uno/docs/direct-integration-use-cases/3ds-configuration-and-testing">docs.y.uno — Direct integration / 3DS configuration &amp; testing</a></li>
+  <li><a href="https://drive.google.com/drive/folders/1f_soPLGeWkdPNgLQ4YAkNBWmv4kF7bAE">Drive — Adyen-3ds2.md reference example (Guoqing)</a></li>
+</ul>
 
 </body>
 </html>
