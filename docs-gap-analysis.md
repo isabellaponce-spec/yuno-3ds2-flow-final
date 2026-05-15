@@ -22,9 +22,9 @@ When the merchant uses their own checkout (Zuora HPM, a Zuora iframe, or the mer
 - Status flow `CREATED → PENDING → IN_PROCESS → SUCCEEDED / DECLINED / ERROR`
 - Webhook + `GET /v1/payments/{id}`
 
-## Open items before Tuesday 19 May
+## Open items — URGENT, due EOD today (Fri 15 May)
 
 | Item | Owner | Deadline |
 |---|---|---|
-| Field name + exact location for the inbound device fingerprint on `POST /v1/payments` | Core team | Mon 18 May EOD |
+| Field name + exact location for the inbound device fingerprint on `POST /v1/payments` | Core team | EOD today (Fri 15 May) |
 | Gateway-details markdowns from Zuora for the s2s gateways without redirect (CyberSource, BlueSnap, PayPalPayflow) | Guoqing (Zuora) | Pre-Tuesday |
