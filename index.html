@@ -24,10 +24,10 @@
 
 <h1>3DS2 — Receiving the device fingerprint when Yuno's checkout is not used</h1>
 
-<p>Yuno's existing 3DS flow assumes Yuno's checkout / SDK collects the device fingerprint. When the merchant uses their own checkout (Zuora HPM, a Zuora iframe, the merchant's own front-end), Yuno cannot collect it directly. We need a way for the merchant to pass the fingerprint to Yuno on the V1 Payments request.</p>
+<p>Yuno's existing 3DS flow assumes Yuno's checkout / SDK collects the device fingerprint. When the merchant uses their own checkout (Zuora HPM, a Zuora iframe, the merchant's own front-end), Yuno cannot collect it directly. We need a way for the merchant to pass the fingerprint to Yuno on the V1 Payments request, and Yuno forwards it to the underlying gateway's own 3DS / MPI.</p>
 
 <div class="gap">
-  <strong>The single addition to the public docs:</strong> a new inbound field on <code>POST /v1/payments</code> where the merchant passes the device fingerprint they collected on their own checkout. Field name and exact location owned by the Core team's spike.
+  <strong>The single addition to the public docs:</strong> a new inbound field on <code>POST /v1/payments</code> where the merchant passes the device fingerprint collected on their own checkout. Yuno is a transparent pass-through — there is no Yuno-side 3DS orchestration in this flow; Yuno does not use its own MPI. Field name and exact location owned by the Core team's spike.
 </div>
 
 <h2>Flow</h2>
@@ -37,22 +37,25 @@ sequenceDiagram
     autonumber
     participant CH as Cardholder<br/>(Browser)
     participant M as Merchant checkout<br/>(Zuora HPM / iframe / own)
-    participant Y as Yuno V1 Payments
-    participant N as Netcetera MPI<br/>(Yuno's 3DS Server)
+    participant Y as Yuno V1 Payments<br/>(transparent pass-through)
+    participant G as Gateway's own MPI<br/>(no Yuno orchestration)
     participant ACS as Issuer ACS
 
     CH->>M: Submit card
     M->>M: Collect device fingerprint<br/>on its own checkout
     M->>Y: POST /v1/payments<br/>{ payment_method, amount, currency,<br/>three_d_secure: { fingerprint } }
-    Y->>N: Run 3DS authentication (s2s)
-    N->>ACS: AReq → ARes
+    Y->>G: Forward fingerprint to the underlying gateway's 3DS
+    G->>ACS: AReq → ARes (gateway-side, not Yuno)
     alt Frictionless
+        G-->>Y: Auth result + ECI / CAVV
         Y-->>M: SUCCEEDED + populated three_d_secure response
     else Challenge required
-        Y-->>M: PENDING + redirect_url to ACS
-        M->>CH: Redirect to ACS challenge
+        G-->>Y: challenge_url
+        Y-->>M: PENDING + redirect_url to gateway's ACS
+        M->>CH: Redirect to gateway's ACS challenge
         CH->>ACS: Complete challenge
-        ACS-->>Y: Result (via Netcetera)
+        ACS-->>G: Result
+        G-->>Y: Final auth
         Y-->>M: Webhook: SUCCEEDED + populated three_d_secure response
     end
 </div>
