@@ -86,8 +86,8 @@
 </div>
 
 <div class="scenario-b">
-  <strong>Scenario B — Gateway does not return a Redirect URL</strong> (server-to-server gateways, e.g. Cardinal Commerce / CyberSource)<br/>
-  Zuora sends device fingerprint + browser data + cardholder info <em>inline</em> on the V1 Payments request, inside a new <code>three_d_secure</code> request object. Yuno runs the 3DS authentication server-to-server via Netcetera and either (a) returns the auth outcome inline with the existing <code>three_d_secure</code> response fields, or (b) returns a <code>redirect_url</code> for the ACS challenge using the exact same Direct-workflow pattern. <strong>Net-new:</strong> the request-side <code>three_d_secure</code> object and the s2s authentication wiring inside Yuno.
+  <strong>Scenario B — Gateway does not return a Redirect URL</strong> (server-to-server gateways, e.g. CyberSource / Cardinal Commerce / BlueSnap / PayPalPayflow)<br/>
+  Since the underlying gateway does not return a redirect URL, Yuno needs a way to <strong>receive the 3DS fingerprint inline on the V1 Payments request</strong>. Yuno then runs the authentication server-to-server via Netcetera and returns the auth outcome inline (frictionless) or a <code>redirect_url</code> to the issuer's ACS (challenge), using the exact same Direct-workflow response pattern. <strong>The single net-new piece:</strong> the inbound 3DS fingerprint field on V1 Payments.
 </div>
 
 <div class="note">
@@ -112,7 +112,7 @@ sequenceDiagram
 
     rect rgb(245, 240, 255)
         Note over Z,ACS: SINGLE CALL — POST /v1/payments with three_d_secure inline
-        Z->>Y: POST /v1/payments<br/>{ payment_method, amount, currency,<br/>three_d_secure: { browser_data, device_fingerprint,<br/>cardholder_info } }
+        Z->>Y: POST /v1/payments<br/>{ payment_method, amount, currency,<br/>three_d_secure: { fingerprint } }
         Y->>N: Initiate 3DS2 authentication (s2s)
         N->>DS: AReq
         DS->>ACS: Route to issuer
@@ -147,7 +147,7 @@ sequenceDiagram
 </div>
 
 <div class="note">
-  <strong>Open piece (owned by Andre's spike):</strong> the exact field shape inside the <em>request-side</em> <code>three_d_secure</code> object. The response-side object is already defined in the existing docs and stays as-is. This doc commits to the shape of the flow; field-level spec is the spike's deliverable.
+  <strong>Open piece (owned by Andre's spike):</strong> the exact field name and location for the inbound 3DS fingerprint on the V1 Payments request. The response-side <code>three_d_secure</code> object is already defined in the existing docs and stays as-is. This doc commits to the shape of the flow; field-level spec is the spike's deliverable.
 </div>
 
 <h2>4. End-to-end sequence (Scenario A — existing Direct workflow, no changes)</h2>
@@ -177,9 +177,9 @@ sequenceDiagram
 
 <div class="endpoint">
   <div class="endpoint-name">POST /v1/payments  (existing, request extended for Scenario B)</div>
-  <p><strong>Triggered by:</strong> Zuora at submit. Single call carries <code>payment_method</code> (token or card), <code>amount</code>, <code>currency</code>, plus the new optional request-side <code>three_d_secure</code> object containing browser data + device fingerprint + cardholder info.</p>
+  <p><strong>Triggered by:</strong> Zuora at submit. Single call carries <code>payment_method</code> (token or card), <code>amount</code>, <code>currency</code>, plus a new optional inbound field on the request for the <strong>3DS fingerprint</strong> collected by Zuora on their HPM (Scenario B only).</p>
   <p><strong>Returns (Scenario A and B):</strong> existing response shape. Either <code>SUCCEEDED</code> with the populated <code>three_d_secure</code> response object when frictionless, or <code>PENDING / WAITING_ADDITIONAL_STEP</code> with a <code>redirect_url</code> in <code>payment.payment_method.payment_method_detail.card</code> when a challenge is required.</p>
-  <p><strong>Pattern match:</strong> identical to how fraud providers receive their context inline on V1 Payments today. No new top-level endpoint. Only a new optional object on the existing payment request, plus s2s authentication wiring on Scenario B.</p>
+  <p><strong>Pattern match:</strong> identical to how fraud providers receive their context inline on V1 Payments today. No new top-level endpoint. Only a new optional inbound field on the existing payment request.</p>
 </div>
 
 <div class="endpoint">
@@ -302,9 +302,8 @@ flowchart LR
 <table>
   <thead><tr><th>Item</th><th>Owner</th><th>Deadline</th></tr></thead>
   <tbody>
-    <tr><td>Field shape inside the request-side <code>three_d_secure</code> object on V1 Payments</td><td>Andre (Integrations)</td><td>Monday 18 May EOD</td></tr>
-    <tr><td>Confirmation that webhook + <code>GET /v1/payments/{id}</code> is sufficient for the Scenario B resume path (vs. a dedicated continue endpoint)</td><td>Andre (Integrations)</td><td>Monday 18 May EOD</td></tr>
-    <tr><td>Per-provider extra parameters not yet supported by Yuno</td><td>Checkout / Cards Integration</td><td>Rolling, post-Tuesday</td></tr>
+    <tr><td>Field name + location for the inbound 3DS fingerprint on V1 Payments (the single net-new piece)</td><td>Andre (Integrations)</td><td>Monday 18 May EOD</td></tr>
+    <tr><td>Gateway-details markdowns for the s2s gateways without redirect (CyberSource, BlueSnap, PayPalPayflow) — confirm fingerprint shape per gateway</td><td>Guoqing (Zuora)</td><td>Pre-Tuesday</td></tr>
     <tr><td>De-obfuscation commitment for the 7 affected PSPs</td><td>Zuora (escalated in daily)</td><td>Tracked separately</td></tr>
   </tbody>
 </table>
